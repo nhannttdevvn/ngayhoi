@@ -1,7 +1,8 @@
+import os
+import sqlite3
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import sqlite3
 
 
 app = FastAPI(title="Cổng đăng ký Ngày hội việc làm")
@@ -17,7 +18,8 @@ app.add_middleware(
 )
 
 
-DB_NAME = "ngayhoi.db"
+DB_PATH = os.getenv("DB_PATH", "ngayhoi.db")
+db = sqlite3.connect(DB_PATH, check_same_thread=False)
 
 
 class DangKy(BaseModel):
@@ -26,8 +28,7 @@ class DangKy(BaseModel):
 
 
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
+    cursor = db.cursor()
 
     cursor.execute(
         """
@@ -40,8 +41,7 @@ def init_db():
         """
     )
 
-    conn.commit()
-    conn.close()
+    db.commit()
 
 
 init_db()
@@ -54,10 +54,8 @@ def root():
 
 @app.post("/api/dang-ky", status_code=status.HTTP_201_CREATED)
 def dang_ky(data: DangKy):
-    conn = sqlite3.connect(DB_NAME)
-
     try:
-        cursor = conn.cursor()
+        cursor = db.cursor()
 
         cursor.execute(
             """
@@ -67,7 +65,7 @@ def dang_ky(data: DangKy):
             (data.ma_sv, data.ma_phien),
         )
 
-        conn.commit()
+        db.commit()
 
         return {
             "ok": True,
@@ -80,6 +78,3 @@ def dang_ky(data: DangKy):
             status_code=409,
             detail="DA_DANG_KY",
         )
-
-    finally:
-        conn.close()
