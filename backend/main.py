@@ -105,3 +105,20 @@ def dang_ky(data: DangKy):
     finally:
         if should_close:
             conn.close()
+
+
+SUC_CHUA = 30
+
+
+@app.get("/api/con-cho")
+def con_cho(ma_phien: str):
+    conn = db if DB_PATH == ":memory:" else sqlite3.connect(DB_PATH, timeout=30.0)
+    try:
+        da_dang_ky = conn.execute(
+            "SELECT COUNT(*) FROM dang_ky WHERE ma_phien = ?",
+            (ma_phien,),
+        ).fetchone()[0]
+        return {"con_cho": max(0, SUC_CHUA - da_dang_ky)}
+    finally:
+        if DB_PATH != ":memory:":
+            conn.close()
