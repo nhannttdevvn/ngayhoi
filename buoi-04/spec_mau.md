@@ -11,3 +11,5 @@ Sức chứa: 30 sinh viên / phiên. Đếm riêng từng phiên.
 | 6 | P01 trống | 40 SV cùng lúc | 30 × 201, 10 × 409 |
 
 Ngoài phạm vi: hủy đăng ký.
+
+

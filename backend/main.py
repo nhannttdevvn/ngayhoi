@@ -1,7 +1,8 @@
+import os
+import sqlite3
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import sqlite3
 
 
 app = FastAPI(title="Cổng đăng ký Ngày hội việc làm")
@@ -17,7 +18,8 @@ app.add_middleware(
 )
 
 
-DB_NAME = "ngayhoi.db"
+DB_PATH = os.getenv("DB_PATH", "ngayhoi.db")
+db = sqlite3.connect(DB_PATH, check_same_thread=False)
 
 
 class DangKy(BaseModel):
@@ -26,8 +28,7 @@ class DangKy(BaseModel):
 
 
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
+    cursor = db.cursor()
 
     cursor.execute(
         """
@@ -40,8 +41,7 @@ def init_db():
         """
     )
 
-    conn.commit()
-    conn.close()
+    db.commit()
 
 
 init_db()
@@ -54,20 +54,41 @@ def root():
 
 @app.post("/api/dang-ky", status_code=status.HTTP_201_CREATED)
 def dang_ky(data: DangKy):
-    conn = sqlite3.connect(DB_NAME)
+    conn = db if DB_PATH == ":memory:" else sqlite3.connect(DB_PATH, timeout=30.0)
+    should_close = (DB_PATH != ":memory:")
 
     try:
         cursor = conn.cursor()
 
+        # Kiểm tra người dùng đã đăng ký phiên này chưa
+        cursor.execute(
+            "SELECT 1 FROM dang_ky WHERE ma_sv = ? AND ma_phien = ?",
+            (data.ma_sv, data.ma_phien),
+        )
+        if cursor.fetchone():
+            raise HTTPException(
+                status_code=409,
+                detail="DA_DANG_KY",
+            )
+
+        # Chèn nguyên tử: chỉ INSERT khi số lượng sinh viên trong phiên < 30
         cursor.execute(
             """
             INSERT INTO dang_ky (ma_sv, ma_phien)
-            VALUES (?, ?)
+            SELECT ?, ?
+            WHERE (SELECT COUNT(*) FROM dang_ky WHERE ma_phien = ?) < 30
             """,
-            (data.ma_sv, data.ma_phien),
+            (data.ma_sv, data.ma_phien, data.ma_phien),
         )
 
         conn.commit()
+
+        # Nếu không có dòng nào được chèn, tức là phiên đã đủ 30 chỗ
+        if cursor.rowcount == 0:
+            raise HTTPException(
+                status_code=409,
+                detail="HET_CHO",
+            )
 
         return {
             "ok": True,
@@ -82,4 +103,5 @@ def dang_ky(data: DangKy):
         )
 
     finally:
-        conn.close()
+        if should_close:
+            conn.close()
